@@ -7,6 +7,29 @@
 #include <cufft.h>
 
 #include <stdio.h>
+#include "common\cpu_bitmap.h"
+#include "common\book.h"
+
+struct DataBlock {
+	unsigned char   *dev_bitmap;
+};
+
+
+
+__global__ void copy2bitmap(cuComplex *in, unsigned char *ptr) {
+	// Odwzorowanie z blockIdx na po³o¿enie piksela
+	int x = blockIdx.x;
+	int y = blockIdx.y;
+	int offset = x + y * gridDim.x;
+
+	float aaa = (atan2(in[offset].y, in[offset].x));
+	
+	ptr[offset * 4 + 0] = 0; //2550000 * abs(in[offset].x);//(atan2(in[offset].y, in[offset].x)); //
+	ptr[offset * 4 + 1] = 0;//2550000 * abs(in[offset].y);//;
+	ptr[offset * 4 + 2] = 255* abs(aaa);
+	ptr[offset * 4 + 3] = 255;
+}
+
 
 
 __global__ void shift2Dout(cuComplex *input, cufftComplex *output)
@@ -45,7 +68,7 @@ __device__ __forceinline__ cuComplex expf(cuComplex z)
 
 }
 
-__global__ void calculate(cuComplex *fths, int *xo, int *yo, int *uo, float *zo2, float dfxs, float lambda, float k0, int Ts, float *fxs, float * y0seg, float* x0seg, int S_Bx, int S_By, int N_Bx, int N_By, int q)
+__global__ void calculate(cuComplex *fths, int *xo, int *yo, double *uo, float *zo2, float dfxs, float lambda, float k0, int Ts, float *fxs, float * y0seg, float* x0seg, int S_Bx, int S_By, int N_Bx, int N_By, int q)
 {
 
 
@@ -54,12 +77,12 @@ __global__ void calculate(cuComplex *fths, int *xo, int *yo, int *uo, float *zo2
 
 	float xp = xo[threadIdx.x] - x0seg[blockIdx.x];
 
-	float rp = sqrt(zo2[threadIdx.x] + xp*xp + yp*yp);
+    float rp = sqrt(zo2[threadIdx.x] + xp*xp + yp*yp);
 
 
-	float inv_rp = 1 / rp;
+    float inv_rp = 1 / rp;
 
-	float fxp = xp*inv_rp / lambda;
+    float fxp = xp*inv_rp / lambda;
 	float fyp = yp*inv_rp / lambda;
 
 
@@ -76,18 +99,38 @@ __global__ void calculate(cuComplex *fths, int *xo, int *yo, int *uo, float *zo2
 
 	cuComplex c0;
 	cuComplex arg;
-	arg.x = (k0*rp - 2 * CUDART_PI_F*(fxs[iifx] + fxs[iify])*(Ts / 2)*inv_rp);
+	cuComplex arg1;
+//	arg.x = (k0*rp - 2 * CUDART_PI_F*(fxs[iifx] + fxs[iify])*(Ts / 2));
 
-	c0 = expf(arg);
-	//	c0.x = uo[blockDim.x] * c0.x;
-	//	c0.y = uo[blockDim.x] * c0.y;
+//	arg1.x = (2 * CUDART_PI_F  * uo[threadIdx.x] / 6400); 
+
+//	arg1.x = 2;
+//	arg.x = -35.699;
+	cuComplex res;
+	float t = arg1.x*inv_rp;
+	sincosf(-arg.x, &res.y, &res.x);
+	res.x *= t;
+	res.y *= t;
+
+//	c0 = expf(arg);
+//	cuComplex uoo = expf(arg1);
+//	c0.x = uo[threadIdx.x] * c0.x;
+//	c0.y = uo[threadIdx.x] * c0.y;
+	c0 = res;
+
+
+	
 
 
 	//fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].x += c0.x;
 	//fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].y += c0.y;
 
-	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].x += c0.x;
-	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].y += c0.y;
+	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].x += c0.x;
+	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].y += c0.y;
+
+//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].x = 128;
+//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].y = 128 ;
+
 }
 
 
@@ -128,14 +171,9 @@ cufftResult execute2D(cufftHandle* plan, cufftComplex* idata, cufftComplex* odat
 }
 
 
-__global__ void copy2bitmap(cuComplex *H, int *bitmap_H)
-{
-
-}
 
 
-
-void FPAS_CGH_2D(int Np, int* xo, int* yo, int* zo, int* uo, int Nx, int Ny, int dx, float lambda, int S_Bx, int S_By, int q, cuComplex* fths_p, cuComplex* fths_s)
+void FPAS_CGH_2D(int Np, int* xo, int* yo, int* zo, double* uo, int Nx, int Ny, int dx, float lambda, int S_Bx, int S_By, int q, cuComplex* fths_p, cuComplex* fths_s)
 {
 	cudaEvent_t start, stop;
 	float time;
@@ -195,16 +233,19 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, int* zo, int* uo, int Nx, int Ny, int
 	int *d_xo;
 	int *d_yo;
 	float *d_z02;
+	double *d_uo;
 
 	cudaMalloc((void**)&d_xo, sizeof(int)*Np);
 	cudaMalloc((void**)&d_yo, sizeof(int)*Np);
 	cudaMalloc((void**)&d_z02, sizeof(float)*Np);
+	cudaMalloc((void**)&d_uo, sizeof(double)*Np);
 
 	cudaMemcpy(d_xo, xo, Np*sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_yo, yo, Np*sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_z02, z02, Np*sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_uo, uo, Np*sizeof(double), cudaMemcpyHostToDevice);
 
-	float *d_fxs;
+    float *d_fxs;
 	float *d_y0seg;
 	float *d_x0seg;
 
@@ -225,12 +266,14 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, int* zo, int* uo, int Nx, int Ny, int
 	block.y = 1;
 
 	cudaEventRecord(start, 0);
-	calculate << < grid, block >> >(fths_p, d_xo, d_yo, uo, d_z02, dfxs, lambda, k0, Ts, d_fxs, d_y0seg, d_x0seg, S_Bx, S_Bx, N_Bx, N_By, q);
+	calculate << < grid, block >> >(fths_p, d_xo, d_yo, d_uo, d_z02, dfxs, lambda, k0, Ts, d_fxs, d_y0seg, d_x0seg, S_Bx, S_Bx, N_Bx, N_By, q);
 
 
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
+	printf("Time for the kernel: %f ms\n", time);
+
 
 	dim3 grids;
 	grids.x = N_Bx;
@@ -240,7 +283,11 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, int* zo, int* uo, int Nx, int Ny, int
 	blocks.x = S_Bx;
 	blocks.y = S_By;
 
+	cudaEventRecord(start, 0);
 	shift2Dout << < grids, blocks >> > (fths_p, fths_s);
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&time, start, stop);
 
 	printf("Time for the kernel: %f ms\n", time);
 
@@ -284,29 +331,45 @@ int main()
 	/*END CUDA FFT 2D PART - DEKLARACJE*/
 
 	/*Kod kernela*/
-	int Np = 512;
+	int Np = 1024;
 
 	int *xo;
 	int *yo;
 	int *zo;
-	int *uo;
+	double *uo;
 
 
 	xo = (int*)malloc((Np)* sizeof(int));
 	yo = (int*)malloc((Np)* sizeof(int));
 	zo = (int*)malloc((Np)* sizeof(int));
-	uo = (int*)malloc((Np)* sizeof(int));
+	uo = (double*)malloc((Np)* sizeof(double));
 
 	for (int tt = 0; tt < Np; tt++)
 	{
 		xo[tt] = tt;
-		yo[tt] = Np - tt;
-		zo[tt] = yo[tt] * xo[tt];
+		yo[tt] = tt;
+		zo[tt] = tt;
 	}
 
 
 
-	cuComplex *fths_p;
+	double W = 0.1e3;
+	double dxo = W / 10.0;
+	int foo = 0;
+
+	for (foo = 0; foo < Np; foo++)
+	{
+	xo[foo] = W;
+	yo[foo] = W;
+	zo[foo] = 500e3;
+	uo[foo] = 3.14;
+	}
+//	uo = exp(2 * pi * 1i * rand(1, Np) / 6400); % object point phase - random
+
+
+
+
+	cuComplex *fths_p;  
 	cuComplex *fths_s;
 
 	cufftComplex* fhs;
@@ -322,21 +385,44 @@ int main()
 	/*START CUDA CALC PART */
 	FPAS_CGH_2D(Np, xo, yo, zo, uo, Nx, Ny, dx, lambda, S_Bx, S_By, 2, fths_p, fths_s);
 
+	cudaMemcpy(h_out, fths_p, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
+
 	/*START CUDA FFT PART */
-	execute2D(&forwardPlan, fths_s, holo, CUFFT_FORWARD);
+	execute2D(&forwardPlan, fths_p, holo, CUFFT_FORWARD);
 
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 
 	/*Wyswietlanie modulu/fazy*/
-	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
+//	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
 
-
+	
 	/*END CUDA FFT PART */
 
 	// Retrieve result from device and store it in host array
 	cudaEventElapsedTime(&time, start, stop);
 	printf("Time for the kernel: %f ms\n", time);
+	printf("Time for the kernel: %f ms\n", h_out[213100].x);
+
+	printf("END \n");
+
+
+		DataBlock   data;
+		CPUBitmap bitmap(Nx, Ny, &data);
+		unsigned char    *dev_bitmap;
+
+		HANDLE_ERROR(cudaMalloc((void**)&dev_bitmap, bitmap.image_size()));
+		data.dev_bitmap = dev_bitmap;
+		cudaMemset(dev_bitmap, 255, bitmap.image_size());
+
+		dim3    grid(Nx, Ny);
+		copy2bitmap << <grid, 1 >> >(fths_p, dev_bitmap);
+	
+		HANDLE_ERROR(cudaMemcpy(bitmap.get_ptr(), dev_bitmap,
+			bitmap.image_size(),
+			cudaMemcpyDeviceToHost));
+
+		bitmap.display_and_exit();
 	
 	return 0;
 }
