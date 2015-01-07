@@ -15,6 +15,26 @@ struct DataBlock {
 };
 
 
+struct kernelConf
+{
+	dim3 block;
+	dim3 grid;
+};
+
+kernelConf* conf_FFT_Shift(int N, int batch)
+{
+	kernelConf* conf = (kernelConf*)malloc(sizeof(kernelConf));
+
+	int threadsPerBlock_X;
+
+	threadsPerBlock_X = 1024;
+
+	conf->block = dim3(threadsPerBlock_X, 1, 1);
+	conf->grid = dim3(((N*batch / threadsPerBlock_X)) + 1, 1, 1);
+
+	return conf;
+}
+
 __global__ void cufftShift_2D(cufftComplex* data, int N, int batch)
 {
 
@@ -76,9 +96,9 @@ __global__ void copy2bitmap(cuComplex *ins, unsigned char *ptr) {
 
 	float aaa = (atan2(ins[offset].y, ins[offset].x));
 	
-	ptr[offset * 4 + 0] = 255 * abs(aaa);//2550000 * abs(ins[offset].x);//(atan2(in[offset].y, in[offset].x)); //
-	ptr[offset * 4 + 1] = 255 * abs(aaa);//2550000 * abs(ins[offset].y);//;
-	ptr[offset * 4 + 2] = 255* abs(aaa);
+	ptr[offset * 4 + 0] = 255 * abs(aaa) / 3.14 ;//2550000 * abs(ins[offset].x);//(atan2(in[offset].y, in[offset].x)); //
+	ptr[offset * 4 + 1] = 255 * abs(aaa) / 3.14;//2550000 * abs(ins[offset].y);//;
+	ptr[offset * 4 + 2] = 255* abs(aaa)/3.14;
 	ptr[offset * 4 + 3] = 255;
 }
 
@@ -143,23 +163,24 @@ cuComplex res;
 	cuComplex arg1;
 	double eps = 2.2204e-16;
 
-	int iifx = round(fxp / dfxs) + S_Bx / 2 + 1;
-	int iify = round(fyp / dfxs) + S_By / 2 + 1;
+	int iifx = round(fxp / dfxs) + S_Bx / 2 ;
+	int iify = round(fyp / dfxs) + S_By / 2 ;
 
 	if (iifx <= 0 || iifx >= S_Bx || iify <= 0 || iify >= S_Bx){
-		iifx = S_Bx / 2 + 1;
-		iify = S_Bx / 2 + 1;
+		iifx = S_Bx / 2 ;
+		iify = S_Bx / 2 ;
 		arg.x = eps;
 
 		sincosf(arg.x, &c0.y, &c0.x);
 		c0.x *= eps;
 		c0.y *= eps;
+	/*	c0.x = 1;
+		c0.y = 2;*/
 	}
 	else
 	{
-
+		
 		arg.x = (k0*rp - 2 * CUDART_PI_F*(fxs[iifx] + fxs[iify])*(Ts / 2));
-
 		arg1.x = (2 * CUDART_PI_F  * uo[threadIdx.x] / 6400);
 
 		//	arg1.x = 2;
@@ -175,6 +196,11 @@ cuComplex res;
 		//	c0.x = uo[threadIdx.x] * c0.x;
 		//	c0.y = uo[threadIdx.x] * c0.y;
 		c0 = res;
+	/*	
+		iifx = S_Bx / 2 ;
+		iify = S_Bx / 2 ;
+		c0.x = 1;
+		c0.y = 2;*/
 
 	}
 	
@@ -457,6 +483,14 @@ int main()
 	cudaEventRecord(start, 0);
 	/*START CUDA CALC PART */
 	FPAS_CGH_2D(Np, xo, yo, zo, uo, Nx, Ny, dx, lambda, S_Bx, S_By, 2, fths_p, fths_s);
+
+
+
+	/*START CUDA FFT_SHIFT PART */
+	kernelConf * conf = conf_FFT_Shift(S_Bx*S_By, batch);
+
+	cufftShift_2D << <conf->grid, conf->block >> >(fths_p, S_Bx, batch);
+	/*END CUDA FFT_SHIFT PART */
 
 	//cudaMemcpy(h_out, fths_p, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
 	//	for (int iii = 0; iii < Nx*Ny; iii++)
