@@ -347,7 +347,7 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 
 	cudaEventRecord(start, 0);
 	calculate << < grid, block >> >(fths_p, d_xo, d_yo, d_uo, d_z02, dfxs, lambda, k0, Ts, d_fxs, d_y0seg, d_x0seg, S_Bx, S_Bx, N_Bx, N_By, q);
-
+	/*
 	cufftComplex* h_out; //dane wynikowe CPU
 
 	h_out = (cufftComplex*)malloc(sizeof(cufftComplex)*S_Bx*S_By*N_Bx*N_By); //allokacja pamiêci na wynik (CPU)
@@ -357,11 +357,8 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 	{
 		if (h_out[iii].x != 0)
 			printf("T: %f + i%f\n", 10e15*h_out[iii].x, 10e15*h_out[iii].y);
-	}
-	cudaEventRecord(stop, 0);
-	cudaEventSynchronize(stop);
-	cudaEventElapsedTime(&time, start, stop);
-	printf("Time for the kernel: %f ms\n", time);
+	}*/
+
 
 
 
@@ -406,6 +403,7 @@ int main()
 
 	//cufftComplex* h_out; //dane wynikowe CPU
 	cufftComplex* holo; //dane wyjœciowe GPU
+	cufftComplex* holo_s; //dane wyjœciowe GPU
 
 	int batch = Nx / S_Bx * Ny / S_By;  //N_Bx*N_By
 	cufftHandle forwardPlan;
@@ -417,7 +415,8 @@ int main()
 
 	cudaMalloc(&holo, sizeof(cufftComplex) *S_Bx*S_By*batch); //allokacja pamiêci na dane wyjœciowe (GPU)
 	cudaMemset(holo, 0, sizeof(cufftComplex)*S_Bx*S_By*batch); //Wype³nianie zaalokowanej pamiêci zerami (GPU)
-
+	cudaMalloc(&holo_s, sizeof(cufftComplex) *S_Bx*S_By*batch); //allokacja pamiêci na dane wyjœciowe (GPU)
+	cudaMemset(holo_s, 0, sizeof(cufftComplex)*S_Bx*S_By*batch); //Wype³nianie zaalokowanej pamiêci zerami (GPU)
 	/*END CUDA FFT 2D PART - DEKLARACJE*/
 
 	/*Kod kernela*/
@@ -491,8 +490,7 @@ int main()
 	/*START CUDA FFT PART */
 	execute2D(&forwardPlan, fths_p, holo, CUFFT_FORWARD);
 
-	cudaEventRecord(stop, 0);
-	cudaEventSynchronize(stop);
+
 
 	/*Wyswietlanie modulu/fazy*/
 //	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
@@ -509,9 +507,10 @@ int main()
 	/*Wyswietlanie modulu/fazy*/
 	//	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
 
-	shift2Dout << < grid, block >> > (holo, holo_f);
+	shift2Dout << < grid, block >> > (holo, holo_s);
 	/*END CUDA FFT PART */
-
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
 	// Retrieve result from device and store it in host array
 	cudaEventElapsedTime(&time, start, stop);
 	printf("Time for the kernel: %f ms\n", time);
@@ -528,8 +527,9 @@ int main()
 		data.dev_bitmap = dev_bitmap;
 		cudaMemset(dev_bitmap, 255, bitmap.image_size());
 
-		dim3    grid(Nx, Ny);
-		copy2bitmap << <grid, 1 >> >(holo, dev_bitmap);
+		
+		dim3 grid_v(Nx, Ny);
+		copy2bitmap << <grid_v, 1 >> >(holo_s, dev_bitmap);
 
 		HANDLE_ERROR(cudaMemcpy(bitmap.get_ptr(), dev_bitmap,
 			bitmap.image_size(),
