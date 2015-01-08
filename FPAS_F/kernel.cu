@@ -399,13 +399,13 @@ int main()
 	cudaEventCreate(&stop);
 
 	/*START CUDA CALC PART - DEKLARACJE*/
-	int Nx = 512;
-	int Ny = 512;
+	int Nx = 1024;
+	int Ny = 1024;
 	int dx = 8;
 	float lambda = 0.5;
 	/*START CUDA FFT 2D PART - DEKLARACJE*/
-	int S_Bx = 4;
-	int S_By = 4;
+	int S_Bx = 16;
+	int S_By = 16;
 	int q = 2;
 	int S_B;
 
