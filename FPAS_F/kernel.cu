@@ -104,25 +104,16 @@ __global__ void copy2bitmap(cuComplex *ins, unsigned char *ptr) {
 
 
 
-__global__ void shift2Dout(cuComplex *input, cufftComplex *output)
+__global__ void shift2Dout(cuComplex *input, cuComplex *output)
 {
-    int i = threadIdx.x;
+	int i = threadIdx.x;
 	int j = threadIdx.y;
 	int n = blockIdx.x;
 	int m = blockIdx.y;
 	int di = blockDim.x / 2;
 	int dj = blockDim.y / 2;
 
-//	float *temp;
-//	cudaMalloc(temp, sizeof(float)*blockDim.x / 2 * blockDim.y / 2);
-	if ((i < di) && (j < dj))
-	output[(i+di) + (j+dj)*blockDim.x] = input[i + j*blockDim.x];
-	if ((i >= di) && (j < dj))
-	output[(i - di) + (j + dj)*blockDim.x] = input[i + j*blockDim.x];
-	if ((i >= di) && (j >= dj))
-	output[(i - di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
-	if ((i < di) && (j >= dj))
-	output[(i + di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
+	output[i + n*blockDim.x + j*blockDim.x*gridDim.x + m*blockDim.x*blockDim.y*gridDim.x] = input[i + j*blockDim.x + n*blockDim.x*blockDim.y + m*blockDim.x*blockDim.y*gridDim.x];
 
 }
 
@@ -506,7 +497,19 @@ int main()
 	/*Wyswietlanie modulu/fazy*/
 //	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
 
-	
+	dim3 grid;
+	grid.x = Nx / S_Bx;
+	grid.y = Ny / S_By;
+
+	dim3 block;
+	block.x = S_Bx;
+	block.y = S_By;
+
+
+	/*Wyswietlanie modulu/fazy*/
+	//	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
+
+	shift2Dout << < grid, block >> > (holo, holo_f);
 	/*END CUDA FFT PART */
 
 	// Retrieve result from device and store it in host array
