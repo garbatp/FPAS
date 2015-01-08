@@ -364,7 +364,7 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 	cudaEventRecord(start, 0);
 	calculate << < grid, block >> >(fths_p, d_xo, d_yo, d_uo, d_z02, dfxs, lambda, k0, Ts, d_fxs, d_y0seg, d_x0seg, S_Bx, S_Bx, S_B, N_Bx, N_By, q);
 
-	cufftComplex* h_out; //dane wynikowe CPU
+/*	cufftComplex* h_out; //dane wynikowe CPU
 
 	h_out = (cufftComplex*)malloc(sizeof(cufftComplex)*S_B*S_B*N_Bx*N_By); //allokacja pamiêci na wynik (CPU)
 
@@ -373,24 +373,16 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 	{
 		if (h_out[iii].x != 0)
 			printf("T: %f + i%f\n", 10e15*h_out[iii].x, 10e15*h_out[iii].y);
-	}
+	}*/
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	printf("Time for the kernel: %f ms\n", time);
+	printf("Time for the kernel FTHS: %f ms\n", time);
 
 
 
 
-	cudaEventRecord(start, 0);
 
-
-
-	cudaEventRecord(stop, 0);
-	cudaEventSynchronize(stop);
-	cudaEventElapsedTime(&time, start, stop);
-
-	printf("Time for the kernel: %f ms\n", time);
 
 	/*	cuComplex *host;
 	host = (cuComplex*)malloc(sizeof(cuComplex)*Nosx*Nosy*Np);
