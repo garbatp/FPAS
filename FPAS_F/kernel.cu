@@ -362,16 +362,10 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 
 
 
-//	dim3 grid;
-	grid.x = N_Bx;
-	grid.y = N_By;
 
-//	dim3 block;
-	block.x = S_Bx;
-	block.y = S_By;
 
-	cudaEventRecord(start, 0);
-	shift2Dout << < grid, block >> > (fths_p, fths_s);
+//cudaEventRecord(start, 0);
+//	shift2Dout << < grid, block >> > (fths_p, fths_s);
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
@@ -393,8 +387,8 @@ int main()
 	cudaEventCreate(&stop);
 
 	/*START CUDA CALC PART - DEKLARACJE*/
-	int Nx = 1024;
-	int Ny = 1024;
+	int Nx = 1536;
+	int Ny = 1536;
 	int dx = 8;
 	float lambda = 0.5;
 	/*START CUDA FFT 2D PART - DEKLARACJE*/
@@ -469,8 +463,8 @@ int main()
 
 	cudaMalloc(&fths_s, sizeof(cuComplex)*Nx*Ny);
 	cudaMemset(fths_s, 0, sizeof(cuComplex)*Nx*Ny);
-
 	cudaEventRecord(start, 0);
+
 	/*START CUDA CALC PART */
 	FPAS_CGH_2D(Np, xo, yo, zo, uo, Nx, Ny, dx, lambda, S_Bx, S_By, 2, fths_p, fths_s);
 
