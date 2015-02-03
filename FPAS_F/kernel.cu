@@ -14,6 +14,25 @@ struct DataBlock {
 	unsigned char   *dev_bitmap;
 };
 
+struct kernelConf
+{
+	dim3 block;
+	dim3 grid;
+};
+
+kernelConf* conf_FFT_Shift(int N, int batch)
+{
+	kernelConf* conf = (kernelConf*)malloc(sizeof(kernelConf));
+
+	int threadsPerBlock_X;
+
+	threadsPerBlock_X = 1024;
+
+	conf->block = dim3(threadsPerBlock_X, 1, 1);
+	conf->grid = dim3(((N*batch / threadsPerBlock_X)) + 1, 1, 1);
+
+	return conf;
+}
 
 __global__ void cufftShift_2D(cufftComplex* data, int N, int batch)
 {
@@ -75,7 +94,7 @@ __global__ void copy2bitmap(cuComplex *ins, unsigned char *ptr) {
 	double cccc = ins[offset].x;
 
 	float aaa = (atan2(ins[offset].y, ins[offset].x));
-	
+
 	ptr[offset * 4 + 0] = 255 * abs(aaa);//2550000 * abs(ins[offset].x);//(atan2(in[offset].y, in[offset].x)); //
 	ptr[offset * 4 + 1] = 255 * abs(aaa);//2550000 * abs(ins[offset].y);//;
 	ptr[offset * 4 + 2] = 255* abs(aaa);
@@ -86,23 +105,23 @@ __global__ void copy2bitmap(cuComplex *ins, unsigned char *ptr) {
 
 __global__ void shift2Dout(cuComplex *input, cufftComplex *output)
 {
-    int i = threadIdx.x;
+	int i = threadIdx.x;
 	int j = threadIdx.y;
 	int n = blockIdx.x;
 	int m = blockIdx.y;
 	int di = blockDim.x / 2;
 	int dj = blockDim.y / 2;
 
-//	float *temp;
-//	cudaMalloc(temp, sizeof(float)*blockDim.x / 2 * blockDim.y / 2);
+	//	float *temp;
+	//	cudaMalloc(temp, sizeof(float)*blockDim.x / 2 * blockDim.y / 2);
 	if ((i < di) && (j < dj))
-	output[(i+di) + (j+dj)*blockDim.x] = input[i + j*blockDim.x];
+		output[(i+di) + (j+dj)*blockDim.x] = input[i + j*blockDim.x];
 	if ((i >= di) && (j < dj))
-	output[(i - di) + (j + dj)*blockDim.x] = input[i + j*blockDim.x];
+		output[(i - di) + (j + dj)*blockDim.x] = input[i + j*blockDim.x];
 	if ((i >= di) && (j >= dj))
-	output[(i - di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
+		output[(i - di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
 	if ((i < di) && (j >= dj))
-	output[(i + di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
+		output[(i + di) + (j - dj)*blockDim.x] = input[i + j*blockDim.x];
 
 }
 
@@ -129,15 +148,15 @@ __global__ void calculate(cuComplex *fths, int *xo, int *yo, double *uo, double 
 
 	float xp = xo[threadIdx.x] - x0seg[blockIdx.x];
 
-    double rp = sqrt(zo2[threadIdx.x] + xp*xp + yp*yp);
+	double rp = sqrt(zo2[threadIdx.x] + xp*xp + yp*yp);
 
 
-    float inv_rp = 1 / rp;
+	float inv_rp = 1 / rp;
 
-    float fxp = xp*inv_rp / lambda;
+	float fxp = xp*inv_rp / lambda;
 	float fyp = yp*inv_rp / lambda;
 
-cuComplex res;
+	cuComplex res;
 	cuComplex c0;
 	cuComplex arg;
 	cuComplex arg1;
@@ -164,7 +183,7 @@ cuComplex res;
 
 		//	arg1.x = 2;
 		//	arg.x = -35.699;
-		
+
 		float t = arg1.x*inv_rp;
 		sincosf(-arg.x, &res.y, &res.x);
 		res.x *= t;
@@ -177,20 +196,20 @@ cuComplex res;
 		c0 = res;
 
 	}
-	
 
-//	fths[blockIdx.y + blockIdx.x*S_Bx + iifx*S_Bx*N_Bx + iify*S_Bx*N_Bx*S_By].x += c0.x;
-//	fths[blockIdx.y + blockIdx.x*S_Bx + iifx*S_Bx*N_Bx + iify*S_Bx*N_Bx*S_By].y += c0.y;
-//	fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].x += c0.x;
-//	fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].y += c0.y;
 
-//	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].x += c0.x;
-//	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].y += c0.y;
+	//	fths[blockIdx.y + blockIdx.x*S_Bx + iifx*S_Bx*N_Bx + iify*S_Bx*N_Bx*S_By].x += c0.x;
+	//	fths[blockIdx.y + blockIdx.x*S_Bx + iifx*S_Bx*N_Bx + iify*S_Bx*N_Bx*S_By].y += c0.y;
+	//	fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].x += c0.x;
+	//	fths[iifx + blockIdx.x*S_Bx + iify*S_Bx*N_Bx + blockIdx.y* S_Bx*N_Bx*S_By].y += c0.y;
+
+	//	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].x += c0.x;
+	//	fths[iifx + iify*S_Bx + blockIdx.y*S_Bx*S_By + blockIdx.x* S_Bx*N_Bx*S_By].y += c0.y;
 
 	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].x += c0.x;
 	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].y += c0.y;
-//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].x = 128;
-//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].y = 128 ;
+	//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].x = 128;
+	//	fths[iifx + iify*S_Bx + blockIdx.x*S_Bx*S_By + blockIdx.y* S_Bx*N_Bx*S_By].y = 128 ;
 
 }
 
@@ -295,7 +314,7 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 
 	int *d_xo;
 	int *d_yo;
-	 double *d_z02;
+	double *d_z02;
 	double *d_uo;
 
 	cudaMalloc((void**)&d_xo, sizeof(int)*Np);
@@ -308,7 +327,7 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 	cudaMemcpy(d_z02, z02, Np*sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_uo, uo, Np*sizeof(double), cudaMemcpyHostToDevice);
 
-    float *d_fxs;
+	float *d_fxs;
 	float *d_y0seg;
 	float *d_x0seg;
 
@@ -341,6 +360,23 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 		if (h_out[iii].x != 0)
 			printf("T: %f + i%f\n", 10e15*h_out[iii].x, 10e15*h_out[iii].y);
 	}
+
+	FILE *fp_real;
+	FILE *fp_imag;
+
+	if ((fp_real = fopen("fths_p_real.txt", "w")) != NULL && (fp_imag = fopen("fths_p_imag.txt", "w")) != NULL) {
+
+
+		for (int iii = 0; iii < S_Bx*S_By*N_Bx*N_By; iii++)
+		{
+			fprintf(fp_real, "%f \n", h_out[iii].x);
+			fprintf(fp_imag, "%f \n", h_out[iii].y);
+		}
+	}
+
+	fclose(fp_real);
+	fclose(fp_imag);
+
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
@@ -348,16 +384,16 @@ void FPAS_CGH_2D(int Np, int* xo, int* yo, double* zo, double* uo, int Nx, int N
 
 
 
-//	dim3 grid;
+	//	dim3 grid;
 	grid.x = N_Bx;
 	grid.y = N_By;
 
-//	dim3 block;
+	//	dim3 block;
 	block.x = S_Bx;
 	block.y = S_By;
 
 	cudaEventRecord(start, 0);
-	shift2Dout << < grid, block >> > (fths_p, fths_s);
+	//shift2Dout << < grid, block >> > (fths_p, fths_s);
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
@@ -432,17 +468,17 @@ int main()
 
 	for (foo = 0; foo < Np; foo++)
 	{
-	xo[foo] = W;
-	yo[foo] = W;
-	zo[foo] = 50e3; // 5e3;
-	uo[foo] = 3.14;
+		xo[foo] = W;
+		yo[foo] = W;
+		zo[foo] = 50e3; // 5e3;
+		uo[foo] = 3.14;
 	}
-//	uo = exp(2 * pi * 1i * rand(1, Np) / 6400); % object point phase - random
+	//	uo = exp(2 * pi * 1i * rand(1, Np) / 6400); % object point phase - random
 
 
 
 
-	cuComplex *fths_p;  
+	cuComplex *fths_p;
 	cuComplex *fths_s;
 
 	cufftComplex* fhs;
@@ -462,6 +498,11 @@ int main()
 	//	for (int iii = 0; iii < Nx*Ny; iii++)
 	//	printf("T: %f\n", h_out[iii]);
 
+	/*START CUDA FFT_SHIFT PART */
+	kernelConf * conf = conf_FFT_Shift(S_Bx*S_By, batch);
+
+	cufftShift_2D << <conf->grid, conf->block >> >(fths_p, S_Bx, batch);
+	/*END CUDA FFT_SHIFT PART */
 
 	/*START CUDA FFT PART */
 	execute2D(&forwardPlan, fths_p, holo, CUFFT_FORWARD);
@@ -470,35 +511,35 @@ int main()
 	cudaEventSynchronize(stop);
 
 	/*Wyswietlanie modulu/fazy*/
-//	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
+	//	cudaMemcpy(h_out, holo, sizeof(cufftComplex)*S_Bx*S_By*batch, cudaMemcpyDeviceToHost);
 
-	
+
 	/*END CUDA FFT PART */
 
 	// Retrieve result from device and store it in host array
 	cudaEventElapsedTime(&time, start, stop);
 	printf("Time for the kernel: %f ms\n", time);
-//	printf("Time for the kernel: %f ms\n", h_out[213100].x);
+	//	printf("Time for the kernel: %f ms\n", h_out[213100].x);
 
 	printf("END \n");
 
 
-		DataBlock   data;
-		CPUBitmap bitmap(Nx, Ny, &data);
-		unsigned char    *dev_bitmap;
+	DataBlock   data;
+	CPUBitmap bitmap(Nx, Ny, &data);
+	unsigned char    *dev_bitmap;
 
-		HANDLE_ERROR(cudaMalloc((void**)&dev_bitmap, bitmap.image_size()));
-		data.dev_bitmap = dev_bitmap;
-		cudaMemset(dev_bitmap, 255, bitmap.image_size());
+	HANDLE_ERROR(cudaMalloc((void**)&dev_bitmap, bitmap.image_size()));
+	data.dev_bitmap = dev_bitmap;
+	cudaMemset(dev_bitmap, 255, bitmap.image_size());
 
-		dim3    grid(Nx, Ny);
-		copy2bitmap << <grid, 1 >> >(holo, dev_bitmap);
+	dim3    grid(Nx, Ny);
+	copy2bitmap << <grid, 1 >> >(holo, dev_bitmap);
 
-		HANDLE_ERROR(cudaMemcpy(bitmap.get_ptr(), dev_bitmap,
-			bitmap.image_size(),
-			cudaMemcpyDeviceToHost));
+	HANDLE_ERROR(cudaMemcpy(bitmap.get_ptr(), dev_bitmap,
+		bitmap.image_size(),
+		cudaMemcpyDeviceToHost));
 
-		bitmap.display_and_exit();
-	
+	bitmap.display_and_exit();
+
 	return 0;
 }
